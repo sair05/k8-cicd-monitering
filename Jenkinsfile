@@ -2,13 +2,17 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME           = "saireddy07/calculator-app"
-        DOCKER_CREDENTIALS   = "docker-hub-credentials-id"
+        IMAGE_NAME         = "saireddy07/calculator-app"
+        DOCKER_CREDENTIALS = "docker-hub-credentials-id"
 
-        GITOPS_REPO          = "https://github.com/sair05/k8-cicd-monitering.git"
-        GIT_CREDENTIALS      = "github-credentials-id"
+        GITOPS_REPO        = "https://github.com/sair05/k8-cicd-monitering.git"
+        GIT_CREDENTIALS    = "github-credentials-id"
 
-        SONARQUBE_SERVER     = "SonarQube-Server"
+        SONARQUBE_SERVER   = "SonarQube-Server"
+    }
+
+    triggers {
+        pollSCM('H/1 * * * *')
     }
 
     stages {
@@ -22,11 +26,12 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 sh '''
-                python3 -m venv venv
-                . venv/bin/activate
+                    python3 -m venv venv
 
-                pip install --upgrade pip
-                pip install -r requirements.txt
+                    . venv/bin/activate
+
+                    pip install --upgrade pip
+                    pip install -r requirements.txt
                 '''
             }
         }
@@ -34,11 +39,11 @@ pipeline {
         stage('Run Unit Tests') {
             steps {
                 sh '''
-                . venv/bin/activate
+                    . venv/bin/activate
 
-                mkdir -p test-reports
+                    mkdir -p test-reports
 
-                pytest test_app.py --junitxml=test-reports/results.xml
+                    pytest test_app.py --junitxml=test-reports/results.xml
                 '''
             }
         }
@@ -52,9 +57,11 @@ pipeline {
         stage('SonarQube Scan') {
             steps {
                 script {
+
                     def scannerHome = tool 'SonarScanner'
 
                     withSonarQubeEnv("${SONARQUBE_SERVER}") {
+
                         sh """
                         ${scannerHome}/bin/sonar-scanner \
                         -Dsonar.projectKey=calculator-app \
@@ -75,48 +82,65 @@ pipeline {
             }
         }
 
+        stage('Build Docker Image') {
+            steps {
+                script {
+                    app = docker.build("${IMAGE_NAME}:${BUILD_NUMBER}")
+                }
+            }
+        }
+
         stage('Push Docker Image') {
             steps {
                 script {
-                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKER_CREDENTIALS}") {
-                        def myImage = docker.build("${IMAGE_NAME}:${env.BUILD_NUMBER}", "-f Dockerfile .")
-                        
-                        myImage.push()
-                        myImage.push('latest')
+
+                    docker.withRegistry('https://index.docker.io/v1/', DOCKER_CREDENTIALS) {
+
+                        app.push("${BUILD_NUMBER}")
+                        app.push("latest")
+
                     }
+
                 }
             }
         }
 
         stage('Update GitOps Repository') {
-    steps {
-        // Ensure you are binding your GitHub credential to a variable (e.g., GIT_TOKEN)
-        withCredentials([usernamePassword(credentialsId: 'github-credentials-id', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
-            sh """
-                git config user.email "saireddysm123@gmail.com"
-                git config user.name "sair05"
-                
-                sed -i 's|image:[[:space:]]*saireddy07/calculator-app:[a-zA-Z0-9._-]*|image: saireddy07/calculator-app:${BUILD_NUMBER}|g' deployment.yml
-                
-                git add deployment.yml
-                
-                # Commit only if there are actual changes
-                if ! git diff --cached --quiet; then
-                    git commit -m "Update calculator image to ${BUILD_NUMBER}"
-                    
-                    # Force Git to use the explicit token in the URL header/auth
-                    git push https://${GIT_TOKEN}@github.com/sair05/k8-cicd-monitering.git HEAD:main
-                else
-                    echo "No changes to commit"
-                fi
-            """
+            steps {
+
+                dir('gitops') {
+
+                    git(
+                        url: GITOPS_REPO,
+                        branch: 'main',
+                        credentialsId: GIT_CREDENTIALS
+                    )
+
+                    sh """
+
+                    sed -i 's|replaceImageTag|${BUILD_NUMBER}|g' deployment.yml
+
+                    git config user.name "sair05"
+                    git config user.email "saireddysm123@gmail.com"
+
+                    git add deployment.yml
+
+                    if git diff --cached --quiet
+                    then
+                        echo "No changes detected."
+                    else
+                        git commit -m "Update calculator image to ${BUILD_NUMBER}"
+                        git push origin main
+                    fi
+
+                    """
+                }
+            }
         }
-    }
-    
-}
     }
 
     post {
+
         success {
             echo "CI Pipeline completed successfully."
         }
