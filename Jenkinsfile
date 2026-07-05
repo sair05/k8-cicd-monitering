@@ -75,13 +75,13 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
-            steps {
-                script {
-                    app = docker.build("${IMAGE_NAME}:${BUILD_NUMBER}")
-                }
-            }
-        }
+        // stage('Build Docker Image') {
+        //     steps {
+        //         script {
+        //             app = docker.build("${IMAGE_NAME}:${BUILD_NUMBER}")
+        //         }
+        //     }
+        // }
 
         stage('Push Docker Image') {
             steps {
@@ -96,9 +96,7 @@ pipeline {
 
         stage('Update GitOps Repository') {
             steps {
-
                 dir('gitops') {
-
                     git(
                         branch: 'main',
                         credentialsId: GIT_CREDENTIALS,
@@ -106,10 +104,11 @@ pipeline {
                     )
 
                     sh """
-                    sed -i 's|image: .*|image: ${IMAGE_NAME}:${BUILD_NUMBER}|g' deployment.yaml
+                    # Safe regex replacement that specifically updates the tag number
+                    sed -i 's|image:[[:space:]]*${IMAGE_NAME}:[a-zA-Z0-9._-]*|image: ${IMAGE_NAME}:${BUILD_NUMBER}|g' deployment.yaml
 
-                    git config user.name "sair05"
-                    git config user.email "saireddysm12@gmail.com"
+                    git config user.name "Jenkins CI"
+                    git config user.email "jenkins@ci.com"
 
                     git add deployment.yaml
 
@@ -124,7 +123,6 @@ pipeline {
                 }
             }
         }
-    }
 
     post {
 
