@@ -89,34 +89,28 @@ pipeline {
         }
 
         stage('Update GitOps Repository') {
+            environment {
+                GIT_REPO_NAME = "k8-cicd-monitering"
+                GIT_USER_NAME = "sair05"
+            }
             steps {
                 dir('gitops') {
-                    git credentialsId: 'github-credentials-id', url: 'https://github.com/sair05/k8-cicd-monitering.git'
+                    withCredentials([string(credentialsId: "${GIT_CREDENTIALS}", variable: 'GITHUB_TOKEN')]) {
+                        sh '''
+                        git config user.email "saireddysm123@gmail.com"
+                        git config user.name "sair05"
 
-                    sh "sed -i 's|image:[[:space:]]*saireddy07/calculator-app:[a-zA-Z0-9._-]*|image: saireddy07/calculator-app:${BUILD_NUMBER}|g' deployment.yml"
+                        sed -i "s|image:[[:space:]]*saireddy07/calculator-app:[a-zA-Z0-9._-]*|image: saireddy07/calculator-app:${BUILD_NUMBER}|g" deployment.yml
 
-                    sh 'git config user.name "sair05"'
-                    sh 'git config user.email "saireddysm123@gmail.com"'
-                    sh 'git add deployment.yml'
+                        git add deployment.yml
 
-                    sh '''
-                    if ! git diff --cached --quiet; then
-                        git commit -m "Update calculator image to ${BUILD_NUMBER}"
-                    fi
-                    '''
-
-                    withCredentials([usernamePassword(
-                        credentialsId: "${GIT_CREDENTIALS}",
-                        usernameVariable: 'GIT_USER',
-                        passwordVariable: 'GIT_TOKEN'
-                    )]) {
-                        sh """
-                        if ! git diff origin/main..HEAD --quiet; then
-                            git push https://\${GIT_USER}:\${GIT_TOKEN}@github.com/sair05/k8-cicd-monitering.git main
+                        if ! git diff --cached --quiet; then
+                            git commit -m "Update calculator image to ${BUILD_NUMBER}"
+                            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
                         else
-                            echo "Nothing to push."
+                            echo "Nothing to commit."
                         fi
-                        """
+                        '''
                     }
                 }
             }
