@@ -107,33 +107,33 @@ pipeline {
 
         stage('Update GitOps Repository') {
             steps {
-
                 dir('gitops') {
-
                     git(
                         url: GITOPS_REPO,
                         branch: 'main',
                         credentialsId: GIT_CREDENTIALS
                     )
 
-                    sh """
+                    // Bind your username/password credential to environment variables
+                    withCredentials([usernamePassword(credentialsId: GIT_CREDENTIALS, passwordVariable: 'GIT_PASS', usernameVariable: 'GIT_USER')]) {
+                        sh """
+                            sed -i 's|replaceImageTag|${BUILD_NUMBER}|g' deployment.yml
 
-                    sed -i 's|replaceImageTag|${BUILD_NUMBER}|g' deployment.yml
+                            git config user.name "sair05"
+                            git config user.email "saireddysm123@gmail.com"
 
-                    git config user.name "sair05"
-                    git config user.email "saireddysm123@gmail.com"
+                            git add deployment.yml
 
-                    git add deployment.yml
-
-                    if git diff --cached --quiet
-                    then
-                        echo "No changes detected."
-                    else
-                        git commit -m "Update calculator image to ${BUILD_NUMBER}"
-                        git push origin main
-                    fi
-
-                    """
+                            if git diff --cached --quiet
+                            then
+                                echo "No changes detected."
+                            else
+                                git commit -m "Update calculator image to ${BUILD_NUMBER} [skip ci]"
+                                # Dynamically inject user and token/password into the URL
+                                git push https://\${GIT_USER}:\${GIT_PASS}@github.com/sair05/k8-cicd-monitering.git main
+                            fi
+                        """
+                    }
                 }
             }
         }
