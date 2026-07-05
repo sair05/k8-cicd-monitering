@@ -89,42 +89,31 @@ pipeline {
         }
 
         stage('Update GitOps Repository') {
-            environment {
-                GIT_REPO_NAME = "k8-cicd-monitering"
-                GIT_USER_NAME = "sair05"
-            }
-            steps {
-                dir('gitops') {
-                    // 1. Clone the repository into the 'gitops' folder so git can track changes
-                    git branch: 'main', credentialsId: "${GIT_CREDENTIALS}", url: "${GITOPS_REPO}"
+    steps {
+        // Ensure you are binding your GitHub credential to a variable (e.g., GIT_TOKEN)
+        withCredentials([usernamePassword(credentialsId: 'github-credentials-id', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_TOKEN')]) {
+            sh """
+                git config user.email "saireddysm123@gmail.com"
+                git config user.name "sair05"
+                
+                sed -i 's|image:[[:space:]]*saireddy07/calculator-app:[a-zA-Z0-9._-]*|image: saireddy07/calculator-app:${BUILD_NUMBER}|g' deployment.yml
+                
+                git add deployment.yml
+                
+                # Commit only if there are actual changes
+                if ! git diff --cached --quiet; then
+                    git commit -m "Update calculator image to ${BUILD_NUMBER}"
                     
-                    // 2. Use usernamePassword mapping to match your Jenkins credential type
-                    withCredentials([usernamePassword(
-                        credentialsId: "${GIT_CREDENTIALS}", 
-                        usernameVariable: 'GIT_USER', 
-                        passwordVariable: 'GIT_TOKEN'
-                    )]) {
-                        sh """
-                        git config user.email "saireddysm123@gmail.com"
-                        git config user.name "sair05"
-
-                        # Update manifest version
-                        sed -i "s|image:[[:space:]]*saireddy07/calculator-app:[a-zA-Z0-9._-]*|image: saireddy07/calculator-app:${BUILD_NUMBER}|g" deployment.yml
-
-                        git add deployment.yml
-
-                        if ! git diff --cached --quiet; then
-                            git commit -m "Update calculator image to ${BUILD_NUMBER}"
-                            # Authenticate with git via basic auth using environment variables
-                            git push https://\${GIT_USER}:\${GIT_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:main
-                        else
-                            echo "Nothing to commit."
-                        fi
-                        """
-                    }
-                }
-            }
+                    # Force Git to use the explicit token in the URL header/auth
+                    git push https://${GIT_TOKEN}@github.com/sair05/k8-cicd-monitering.git HEAD:main
+                else
+                    echo "No changes to commit"
+                fi
+            """
         }
+    }
+    
+}
     }
 
     post {
