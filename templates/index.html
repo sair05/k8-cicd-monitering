@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Simple Cloud Calculator</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 50px; background-color: #f4f4f9; text-align: center; }
+        .calc-box { background: white; padding: 20px; border-radius: 8px; display: inline-block; box-shadow: 0px 0px 10px #ccc; }
+        input, select, button { margin: 10px; padding: 10px; font-size: 16px; }
+    </style>
+</head>
+<body>
+    <div class="calc-box">
+        <h2>GitOps Calculator</h2>
+        <form method="POST">
+            <input type="number" step="any" name="num1" required placeholder="Number 1">
+            <select name="operation">
+                <option value="add">+</option>
+                <option value="subtract">-</option>
+                <option value="multiply">*</option>
+                <option value="divide">/</option>
+            </select>
+            <input type="number" step="any" name="num2" required placeholder="Number 2">
+            <br>
+            <button type="submit">Calculate</button>
+        </form>
+        {% if result is not none %}
+            <h3>Result: {{ result }}</h3>
+        {% endif %}
+    </div>
+</body>
+</html>
