@@ -124,6 +124,8 @@ pipeline {
             }
         }
 
+    }
+
     post {
 
         success {
