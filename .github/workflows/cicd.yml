@@ -1,0 +1,94 @@
+name: CI/CD GitOps Pipeline
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  continuous-integration:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Checkout Source Code
+    - name: Checkout Source Code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0 # Required by SonarQube for better analysis relevance
+
+    # 2. Set up Python environment & Install Dependencies
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install Dependencies
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    # 3. Run Unit Tests
+    - name: Run Unit Tests
+      run: |
+        mkdir -p test-reports
+        pytest test_app.py --junitxml=test-reports/results.xml
+
+    # 4. SonarQube Scan
+    - name: SonarQube Scan
+      uses: sonarsource/sonarqube-scan-action@v3
+      env:
+        SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        SONAR_HOST_URL: "https://framing-untying-snippet.ngrok-free.dev" # Update with your reachable SonarQube URL
+      with:
+        args: >
+          -Dsonar.projectKey=calculator-app
+          -Dsonar.projectName=calculator-app
+          -Dsonar.sources=.
+          -Dsonar.python.version=3
+
+    # 5. Build and Push Docker Image
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v3
+      with:
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+    - name: Build and Push Docker Image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          ${{ secrets.DOCKER_HUB_USERNAME }}/calculator-app:${{ github.run_number }}
+          ${{ secrets.DOCKER_HUB_USERNAME }}/calculator-app:latest
+
+  gitops-update:
+    needs: continuous-integration
+    runs-on: ubuntu-latest
+    steps:
+    # 6. Checkout Repository for Manifest Update
+    - name: Checkout Repo
+      uses: actions/checkout@v4
+
+    # 7. Update Image Tag in deployment.yml and Push Changes
+    - name: Update Deployment Manifest
+      run: |
+        sed -i 's|replaceImageTag|${{ github.run_number }}|g' deployment.yml
+        
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        
+        git add deployment.yml
+        
+        # Check if there are changes before committing to avoid workflow failures
+        if ! git diff --cached --quiet; then
+          git commit -m "Update calculator image tag to ${{ github.run_number }} [skip ci]"
+          git push
+        else
+          echo "No changes detected. Skipping commit."
+        fi
