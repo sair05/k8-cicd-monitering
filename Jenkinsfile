@@ -1,72 +1,133 @@
 pipeline {
     agent any
-    
+
     environment {
-        DOCKER_HUB_REGISTRY = 'saireddy07/calculator'
-        DOCKER_CREDENTIALS_ID = 'docker-hub-credentials-id' // ID of credentials stored in Jenkins
-        GIT_MANIFEST_REPO = 'github.com/sair05/k8s-cicd-repo.git'
-        GIT_CREDENTIALS_ID = 'github-credentials-id'
+        IMAGE_NAME           = "saireddy07/calculator"
+        DOCKER_CREDENTIALS   = "docker-hub-credentials-id"
+
+        GITOPS_REPO          = "https://github.com/sair05/k8-cicd-monitering.git"
+        GIT_CREDENTIALS       = "github-credentials-id"
+
+        SONARQUBE_SERVER     = "SonarQube-Server"
     }
-    
+
     stages {
-        stage('Checkout') {
+
+        stage('Checkout Source Code') {
             steps {
                 checkout scm
             }
         }
-        
+
         stage('Install Dependencies') {
             steps {
-                sh 'pip install -r requirements.txt'
+                sh '''
+                python3 -m pip install --upgrade pip
+                python3 -m pip install -r requirements.txt
+                '''
             }
         }
-        
-        stage('Unit Test') {
+
+        stage('Run Unit Tests') {
             steps {
-                sh 'pytest test_app.py --junitxml=test-reports/results.xml'
+                sh '''
+                mkdir -p test-reports
+                pytest test_app.py --junitxml=test-reports/results.xml
+                '''
             }
         }
-        
-        stage('SonarQube Quality Scan') {
+
+        stage('Publish Test Results') {
             steps {
-                // Ensure SonarQube Server is configured in Jenkins System Settings
-                withSonarQubeEnv('SonarQube-Server') {
-                    sh 'sonar-scanner -Dsonar.projectKey=calculator-app -Dsonar.sources=.'
+                junit 'test-reports/results.xml'
+            }
+        }
+
+        stage('SonarQube Scan') {
+            steps {
+                withSonarQubeEnv("${SONARQUBE_SERVER}") {
+                    sh '''
+                    sonar-scanner \
+                    -Dsonar.projectKey=calculator-app \
+                    -Dsonar.projectName=calculator-app \
+                    -Dsonar.sources=. \
+                    -Dsonar.python.version=3
+                    '''
                 }
             }
         }
-        
-        stage('Build & Push Docker Image') {
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+
+        stage('Build Docker Image') {
             steps {
                 script {
-                    docker.withRegistry('', DOCKER_CREDENTIALS_ID) {
-                        def customImage = docker.build("${DOCKER_HUB_REGISTRY}:${BUILD_NUMBER}")
-                        customImage.push()
-                        customImage.push('latest')
+                    app = docker.build("${IMAGE_NAME}:${BUILD_NUMBER}")
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            steps {
+                script {
+                    docker.withRegistry('', DOCKER_CREDENTIALS) {
+                        app.push("${BUILD_NUMBER}")
+                        app.push("latest")
                     }
                 }
             }
         }
-        
-        stage('Update Git Manifest (ArgoCD Trigger)') {
+
+        stage('Update GitOps Repository') {
             steps {
-                script {
-                    // Clone the separate Git repository holding your Kubernetes manifests
-                    dir('manifest-repo') {
-                        git url: "https://${GIT_MANIFEST_REPO}", credentialsId: GIT_CREDENTIALS_ID, branch: 'main'
-                        
-                        // Update the deployment yaml file with the new build tag
-                        sh """
-                            sed -i 's|image: ${DOCKER_HUB_REGISTRY}:.*|image: ${DOCKER_HUB_REGISTRY}:${BUILD_NUMBER}|g' deployment.yaml
-                            git config user.email "jenkins@ci.com"
-                            git config user.name "Jenkins CI"
-                            git add deployment.yaml
-                            git commit -m "Automated image tag update to build ${BUILD_NUMBER} [skip ci]"
-                            git push origin main
-                        """
-                    }
+
+                dir('gitops') {
+
+                    git(
+                        branch: 'main',
+                        credentialsId: GIT_CREDENTIALS,
+                        url: GITOPS_REPO
+                    )
+
+                    sh """
+                    sed -i 's|image: .*|image: ${IMAGE_NAME}:${BUILD_NUMBER}|g' deployment.yaml
+
+                    git config user.name "Jenkins CI"
+                    git config user.email "jenkins@ci.com"
+
+                    git add deployment.yaml
+
+                    if git diff --cached --quiet
+                    then
+                        echo "No changes to commit."
+                    else
+                        git commit -m "Update calculator image to ${BUILD_NUMBER}"
+                        git push origin main
+                    fi
+                    """
                 }
             }
+        }
+    }
+
+    post {
+
+        success {
+            echo "CI Pipeline completed successfully."
+        }
+
+        failure {
+            echo "CI Pipeline failed."
+        }
+
+        always {
+            cleanWs()
         }
     }
 }
