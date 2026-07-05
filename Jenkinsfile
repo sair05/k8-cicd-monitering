@@ -22,8 +22,11 @@ pipeline {
         stage('Install Dependencies') {
             steps {
                 sh '''
-                python3 -m pip install --upgrade pip
-                python3 -m pip install -r requirements.txt
+                python3 -m venv venv
+                . venv/bin/activate
+
+                pip install --upgrade pip
+                pip install -r requirements.txt
                 '''
             }
         }
@@ -31,7 +34,10 @@ pipeline {
         stage('Run Unit Tests') {
             steps {
                 sh '''
+                . venv/bin/activate
+
                 mkdir -p test-reports
+
                 pytest test_app.py --junitxml=test-reports/results.xml
                 '''
             }
@@ -45,14 +51,18 @@ pipeline {
 
         stage('SonarQube Scan') {
             steps {
-                withSonarQubeEnv("${SONARQUBE_SERVER}") {
-                    sh '''
-                    sonar-scanner \
-                    -Dsonar.projectKey=calculator-app \
-                    -Dsonar.projectName=calculator-app \
-                    -Dsonar.sources=. \
-                    -Dsonar.python.version=3
-                    '''
+                script {
+                    def scannerHome = tool 'SonarScanner'
+
+                    withSonarQubeEnv('SonarQube-Server') {
+                        sh """
+                        ${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectKey=calculator-app \
+                        -Dsonar.projectName=calculator-app \
+                        -Dsonar.sources=. \
+                        -Dsonar.python.version=3
+                        """
+                    }
                 }
             }
         }
