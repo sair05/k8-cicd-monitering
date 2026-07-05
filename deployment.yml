@@ -17,7 +17,7 @@ spec:
       containers:
       - name: calculator
         # Jenkins will dynamically rewrite the tag on the line below
-        image: saireddy07/calculator-app:1
+        image: saireddy07/calculator-app:replaceImageTag
         ports:
         - containerPort: 5000
 ---
