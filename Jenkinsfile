@@ -2,11 +2,11 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME           = "saireddy07/calculator"
+        IMAGE_NAME           = "saireddy07/calculator-app"
         DOCKER_CREDENTIALS   = "docker-hub-credentials-id"
 
         GITOPS_REPO          = "https://github.com/sair05/k8-cicd-monitering.git"
-        GIT_CREDENTIALS       = "github-credentials-id"
+        GIT_CREDENTIALS      = "github-credentials-id"
 
         SONARQUBE_SERVER     = "SonarQube-Server"
     }
@@ -54,7 +54,7 @@ pipeline {
                 script {
                     def scannerHome = tool 'SonarScanner'
 
-                    withSonarQubeEnv('SonarQube-Server') {
+                    withSonarQubeEnv("${SONARQUBE_SERVER}") {
                         sh """
                         ${scannerHome}/bin/sonar-scanner \
                         -Dsonar.projectKey=calculator-app \
@@ -75,22 +75,11 @@ pipeline {
             }
         }
 
-        // stage('Build Docker Image') {
-        //     steps {
-        //         script {
-        //             app = docker.build("${IMAGE_NAME}:${BUILD_NUMBER}")
-        //         }
-        //     }
-        // }
-
         stage('Push Docker Image') {
             steps {
                 script {
-                    // Wrap the registry block and ensure all strings are explicitly quoted
-                    docker.withRegistry('https://index.docker.io/v1/', 'docker-hub-credentials-id') {
-                        
-                        // Note the single quotes around the entire string, except for the variable interpolation
-                        def myImage = docker.build("saireddy07/calculator-app:${env.BUILD_NUMBER}", "-f Dockerfile .")
+                    docker.withRegistry('https://index.docker.io/v1/', "${DOCKER_CREDENTIALS}") {
+                        def myImage = docker.build("${IMAGE_NAME}:${env.BUILD_NUMBER}", "-f Dockerfile .")
                         
                         myImage.push()
                         myImage.push('latest')
@@ -102,14 +91,15 @@ pipeline {
         stage('Update GitOps Repository') {
             steps {
                 dir('gitops') {
+                    // Pull down your GitOps repo using stored keys
                     git(
                         branch: 'main',
-                        credentialsId: GIT_CREDENTIALS,
-                        url: GITOPS_REPO
+                        credentialsId: "${GIT_CREDENTIALS}",
+                        url: "${GITOPS_REPO}"
                     )
 
                     sh """
-                    # Safe regex replacement that specifically updates the tag number
+                    # Safe regex replacement that updates the target tag matching your deployment file
                     sed -i 's|image:[[:space:]]*${IMAGE_NAME}:[a-zA-Z0-9._-]*|image: ${IMAGE_NAME}:${BUILD_NUMBER}|g' deployment.yml
 
                     git config user.name "sair05"
@@ -117,14 +107,27 @@ pipeline {
 
                     git add deployment.yml
 
-                    if git diff --cached --quiet
-                    then
+                    if git diff --cached --quiet; then
                         echo "No changes to commit."
                     else
                         git commit -m "Update calculator image to ${BUILD_NUMBER}"
-                        git push origin main
                     fi
                     """
+
+                    // Securely push changes using inline environment variables from Jenkins store
+                    withCredentials([usernamePassword(
+                        credentialsId: "${GIT_CREDENTIALS}", 
+                        usernameVariable: 'GIT_USER', 
+                        passwordVariable: 'GIT_TOKEN'
+                    )]) {
+                        sh """
+                        if ! git diff origin/main..HEAD --quiet; then
+                            git push https://${GIT_USER}:${GIT_TOKEN}@github.com/sair05/k8-cicd-monitering.git main
+                        else
+                            echo "Nothing to push."
+                        fi
+                        """
+                    }
                 }
             }
         }
