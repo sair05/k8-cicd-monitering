@@ -95,31 +95,39 @@ pipeline {
             }
             steps {
                 dir('gitops') {
-                    withCredentials([string(credentialsId: "${GIT_CREDENTIALS}", variable: 'GITHUB_TOKEN')]) {
-                        sh '''
+                    // 1. Clone the repository into the 'gitops' folder so git can track changes
+                    git branch: 'main', credentialsId: "${GIT_CREDENTIALS}", url: "${GITOPS_REPO}"
+                    
+                    // 2. Use usernamePassword mapping to match your Jenkins credential type
+                    withCredentials([usernamePassword(
+                        credentialsId: "${GIT_CREDENTIALS}", 
+                        usernameVariable: 'GIT_USER', 
+                        passwordVariable: 'GIT_TOKEN'
+                    )]) {
+                        sh """
                         git config user.email "saireddysm123@gmail.com"
                         git config user.name "sair05"
 
+                        # Update manifest version
                         sed -i "s|image:[[:space:]]*saireddy07/calculator-app:[a-zA-Z0-9._-]*|image: saireddy07/calculator-app:${BUILD_NUMBER}|g" deployment.yml
 
                         git add deployment.yml
 
                         if ! git diff --cached --quiet; then
                             git commit -m "Update calculator image to ${BUILD_NUMBER}"
-                            git push https://${GITHUB_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME} HEAD:main
+                            # Authenticate with git via basic auth using environment variables
+                            git push https://\${GIT_USER}:\${GIT_TOKEN}@github.com/${GIT_USER_NAME}/${GIT_REPO_NAME}.git HEAD:main
                         else
                             echo "Nothing to commit."
                         fi
-                        '''
+                        """
                     }
                 }
             }
         }
     }
-    
 
     post {
-
         success {
             echo "CI Pipeline completed successfully."
         }
