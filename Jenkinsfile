@@ -89,40 +89,40 @@ pipeline {
         }
 
         stage('Update GitOps Repository') {
-    steps {
-        dir('gitops') {
-            git credentialsId: 'github-credentials-id', url: 'https://github.com/sair05/k8-cicd-monitering.git'
-            
-            sh "sed -i 's|image:[[:space:]]*saireddy07/calculator-app:[a-zA-Z0-9._-]*|image: saireddy07/calculator-app:${BUILD_NUMBER}|g' deployment.yml"
-            
-            sh 'git config user.name "sair05"'
-            sh 'git config user.email "saireddysm123@gmail.com"'
-            sh 'git add deployment.yml'
-            
-            // Commit if there are changes
-            sh '''
-            if ! git diff --cached --quiet; then
-                git commit -m "Update calculator image to ${BUILD_NUMBER}"
-            fi
-            '''
-            
-            // Add the backslashes (\$) to GIT_USER and GIT_TOKEN here:
-            withCredentials([usernamePassword(
-                credentialsId: 'github-credentials-id', 
-                usernameVariable: 'GIT_USER', 
-                passwordVariable: 'github-credentials-id'
-            )]) {
-                sh """
-                if ! git diff origin/main..HEAD --quiet; then
-                    git push https://\${GIT_USER}:\${GIT_TOKEN}@github.com/sair05/k8-cicd-monitering.git main
-                else
-                    echo "Nothing to push."
-                fi
-                """
+            steps {
+                dir('gitops') {
+                    git credentialsId: 'github-credentials-id', url: 'https://github.com/sair05/k8-cicd-monitering.git'
+
+                    sh "sed -i 's|image:[[:space:]]*saireddy07/calculator-app:[a-zA-Z0-9._-]*|image: saireddy07/calculator-app:${BUILD_NUMBER}|g' deployment.yml"
+
+                    sh 'git config user.name "sair05"'
+                    sh 'git config user.email "saireddysm123@gmail.com"'
+                    sh 'git add deployment.yml'
+
+                    sh '''
+                    if ! git diff --cached --quiet; then
+                        git commit -m "Update calculator image to ${BUILD_NUMBER}"
+                    fi
+                    '''
+
+                    withCredentials([usernamePassword(
+                        credentialsId: "${GIT_CREDENTIALS}",
+                        usernameVariable: 'GIT_USER',
+                        passwordVariable: 'GIT_TOKEN'
+                    )]) {
+                        sh """
+                        if ! git diff origin/main..HEAD --quiet; then
+                            git push https://\${GIT_USER}:\${GIT_TOKEN}@github.com/sair05/k8-cicd-monitering.git main
+                        else
+                            echo "Nothing to push."
+                        fi
+                        """
+                    }
+                }
             }
         }
     }
-}
+    
 
     post {
 
