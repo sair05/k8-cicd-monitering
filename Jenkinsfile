@@ -87,7 +87,7 @@ pipeline {
             steps {
                 script {
                     // Wrap the registry block and ensure all strings are explicitly quoted
-                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials-id') {
+                    docker.withRegistry('https://index.docker.io/v1/', 'docker-hub-credentials-id') {
                         
                         // Note the single quotes around the entire string, except for the variable interpolation
                         def myImage = docker.build("saireddy07/calculator-app:${env.BUILD_NUMBER}", "-f Dockerfile .")
