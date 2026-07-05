@@ -117,8 +117,8 @@ pipeline {
                     // Securely push changes using inline environment variables from Jenkins store
                     withCredentials([usernamePassword(
                         credentialsId: "${GIT_CREDENTIALS}", 
-                        usernameVariable: 'GIT_USER', 
-                        passwordVariable: 'GIT_TOKEN'
+                        usernameVariable: 'sair05', 
+                        passwordVariable: "${GIT_CREDENTIALS}"
                     )]) {
                         sh """
                         if ! git diff origin/main..HEAD --quiet; then
