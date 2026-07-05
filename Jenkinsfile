@@ -112,8 +112,8 @@ pipeline {
                     # Safe regex replacement that specifically updates the tag number
                     sed -i 's|image:[[:space:]]*${IMAGE_NAME}:[a-zA-Z0-9._-]*|image: ${IMAGE_NAME}:${BUILD_NUMBER}|g' deployment.yml
 
-                    git config user.name "Jenkins CI"
-                    git config user.email "jenkins@ci.com"
+                    git config user.name "sair05"
+                    git config user.email "saireddysm123@gmail.com"
 
                     git add deployment.yml
 
