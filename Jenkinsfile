@@ -89,50 +89,40 @@ pipeline {
         }
 
         stage('Update GitOps Repository') {
-            steps {
-                dir('gitops') {
-                    // Pull down your GitOps repo using stored keys
-                    git(
-                        branch: 'main',
-                        credentialsId: "${GIT_CREDENTIALS}",
-                        url: "${GITOPS_REPO}"
-                    )
-
-                    sh """
-                    # Safe regex replacement that updates the target tag matching your deployment file
-                    sed -i 's|image:[[:space:]]*${IMAGE_NAME}:[a-zA-Z0-9._-]*|image: ${IMAGE_NAME}:${BUILD_NUMBER}|g' deployment.yml
-
-                    git config user.name "sair05"
-                    git config user.email "saireddysm123@gmail.com"
-
-                    git add deployment.yml
-
-                    if git diff --cached --quiet; then
-                        echo "No changes to commit."
-                    else
-                        git commit -m "Update calculator image to ${BUILD_NUMBER}"
-                    fi
-                    """
-
-                    // Securely push changes using inline environment variables from Jenkins store
-                    withCredentials([usernamePassword(
-                        credentialsId: "${GIT_CREDENTIALS}", 
-                        usernameVariable: 'sair05', 
-                        passwordVariable: "${GIT_CREDENTIALS}"
-                    )]) {
-                        sh """
-                        if ! git diff origin/main..HEAD --quiet; then
-                            git push https://${GIT_USER}:${GIT_TOKEN}@github.com/sair05/k8-cicd-monitering.git main
-                        else
-                            echo "Nothing to push."
-                        fi
-                        """
-                    }
-                }
+    steps {
+        dir('gitops') {
+            git credentialsId: 'github-credentials-id', url: 'https://github.com/sair05/k8-cicd-monitering.git'
+            
+            sh "sed -i 's|image:[[:space:]]*saireddy07/calculator-app:[a-zA-Z0-9._-]*|image: saireddy07/calculator-app:${BUILD_NUMBER}|g' deployment.yml"
+            
+            sh 'git config user.name "sair05"'
+            sh 'git config user.email "saireddysm123@gmail.com"'
+            sh 'git add deployment.yml'
+            
+            // Commit if there are changes
+            sh '''
+            if ! git diff --cached --quiet; then
+                git commit -m "Update calculator image to ${BUILD_NUMBER}"
+            fi
+            '''
+            
+            // Add the backslashes (\$) to GIT_USER and GIT_TOKEN here:
+            withCredentials([usernamePassword(
+                credentialsId: 'github-credentials-id', 
+                usernameVariable: 'GIT_USER', 
+                passwordVariable: 'github-credentials-id'
+            )]) {
+                sh """
+                if ! git diff origin/main..HEAD --quiet; then
+                    git push https://\${GIT_USER}:\${GIT_TOKEN}@github.com/sair05/k8-cicd-monitering.git main
+                else
+                    echo "Nothing to push."
+                fi
+                """
             }
         }
-
     }
+}
 
     post {
 
