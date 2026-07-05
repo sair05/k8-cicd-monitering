@@ -108,8 +108,8 @@ pipeline {
                     sh """
                     sed -i 's|image: .*|image: ${IMAGE_NAME}:${BUILD_NUMBER}|g' deployment.yaml
 
-                    git config user.name "Jenkins CI"
-                    git config user.email "jenkins@ci.com"
+                    git config user.name "sair05"
+                    git config user.email "saireddysm12@gmail.com"
 
                     git add deployment.yaml
 
